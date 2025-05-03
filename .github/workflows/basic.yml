@@ -28,7 +28,7 @@ jobs:
       # Runs a single command using the runners shell
       - name: Build c4sh Debian package
         run: |
-          apt-get install -y debhelper devscripts
+          sudo apt-get install -y debhelper devscripts
           dpkg-buildpackage -us -uc -b
 
       - name: Upload Debian package
