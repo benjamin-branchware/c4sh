@@ -29,6 +29,7 @@ jobs:
       - name: Build c4sh Debian package
         run: |
           sudo apt-get install -y debhelper devscripts
+          cd c4sh
           dpkg-buildpackage -us -uc -b
 
       - name: Upload Debian package
