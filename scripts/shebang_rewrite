@@ -1,0 +1,95 @@
+#!/bin/sh
+
+# --- Configuration ---
+TARGET_TEXT="@SHEBANG@"
+TARGET_FILE="$1"
+SHEBANG_LINE=""
+TMP_FILE=""
+
+# --- Helper functions ---
+error_exit() {
+	echo "ERROR: $1" >&2
+	exit 1
+}
+
+usage() {
+	echo "Usage: ${0##*/} <filename>" >&2
+	exit 1
+}
+
+cleanup() {
+	if [ -n "$TMP_FILE" ] && [ -f "$TMP_FILE" ]; then
+		rm -f "$TMP_FILE"
+	fi
+}
+
+trap cleanup EXIT HUP INT TERM
+
+if [ "$#" -ne 1 ]; then
+	usage
+fi
+
+if [ ! -f "$TARGET_FILE" ]; then
+	error_exit "File '$TARGET_FILE' not found."
+fi
+
+if [ ! -r "$TARGET_FILE" ]; then
+	error_exit "File '$TARGET_FILE' is not readable."
+fi
+
+if [ ! -w "$TARGET_FILE" ]; then
+	if [ -w "$(dirname "$TARGET_FILE")" ]; then
+		echo "Warning: File '$TARGET_FILE' is not writable, but directory is. Proceeding..." >&2
+	else
+		error_exit "File '$TARGET_FILE' and its directory are not writable."
+	fi
+fi
+
+FIRST_LINE=$(head -n 1 "$TARGET_FILE")
+
+if [ $? -ne 0 ]; then
+	error_exit "Could not read the first line from '$TARGET_FILE'."
+fi
+
+if [ -z "$FIRST_LINE" ] && [ -s "$TARGET_FILE" ]; then
+	{ read -r FIRST_LINE || : ; } < "$TARGET_FILE"
+fi
+
+if [ "$FIRST_LINE" != "$TARGET_TEXT" ]; then
+	echo "First line of '$TARGET_FILE' is not '$TARGET_TEXT'. No changes made."
+	exit 0
+fi
+
+echo "Found '$TARGET_TEXT' on the first line of '$TARGET_FILE'."
+
+if command -v /usr/bin/env >/dev/null 2>&1 && /usr/bin/env bash -c "exit 0" >/dev/null 2>&1; then
+	SHEBANG_LINE="#!/usr/bin/env bash"
+elif [ -x /usr/bin/bash ]; then
+	SHEBANG_LINE="#!/usr/bin/bash"
+elif [ -x /bin/bash ]; then
+	SHEBANG_LINE="#!/bin/bash"
+else
+	error_exit "Could not find a suitable bash executable."
+fi
+
+TMP_FILE=$(mktemp "/tmp/${0##*/}.XXXXXX")
+if [ $? -ne 0 ] || [ -z "$TMP_FILE" ]; then
+	TMP_FILE="/tmp/${0##*/}.$$"
+	if [ -e "$TMP_FILE" ]; then
+		error_exit "Temporary file '$TMP_FILE' already exists."
+	fi
+	(umask 077 && > "$TMP_FILE") || error_exit "Cannot create temporary file '$TMP_FILE'."
+fi
+
+if sed "1s|$TARGET_TEXT|$SHEBANG_LINE|" "$TARGET_FILE" > "$TMP_FILE"; then
+	if mv "$TMP_FILE" "$TARGET_FILE"; then
+		echo "Successfully replaced shebang line in '$TARGET_FILE'."
+		TMP_FILE=""
+		exit 0
+	else
+		error_exit "Failed to move temporary file '$TMP_FILE' to '$TARGET_FILE'. Original file unchanged."
+	fi
+else
+	error_exit "sed command failed to process '$TARGET_FILE'. No changes made."
+fi
+
