@@ -10,14 +10,7 @@ define(`_CHECK_SHELL_TYPE', `ifelse(TARGET_SHELL, `sh', `bourne',
                                     TARGET_SHELL, `fish', `fish',
                                     `unknown')')dnl
 
-define(`_SHEBANG', `ifelse(TARGET_SHELL, `sh', `#!/bin/sh',
-                           TARGET_SHELL, `bash', `#!/bin/bash',
-                           TARGET_SHELL, `ksh', `#!/bin/ksh',
-                           TARGET_SHELL, `zsh', `#!/bin/zsh',
-                           TARGET_SHELL, `csh', `#!/bin/csh',
-                           TARGET_SHELL, `tcsh', `#!/bin/tcsh',
-                           TARGET_SHELL, `fish', `#!/bin/fish',
-                           `#!/bin/false')')dnl
+define(`_SHEBANG', `esyscmd(`TARGET_SHELL'=TARGET_SHELL ./scripts/shebang_rewrite)')dnl
 
 define(`_EXPORT', `ifelse(_CHECK_SHELL_TYPE, `bourne', `export $1='$2'`,
                           _CHECK_SHELL_TYPE, `c', `setenv $1 '$2'`,
@@ -30,19 +23,19 @@ define(`_IF', `ifelse(_CHECK_SHELL_TYPE, `bourne',
 ifelse(`$3', `', `', `else
   $3
 ')fi',
-                         _CHECK_SHELL_TYPE, `c',
+                      _CHECK_SHELL_TYPE, `c',
 `if $1 then
   $2
 ifelse(`$3', `', `', `else
   $3
 ')endif',
-                          _CHECK_SHELL_TYPE, `fish',
+                      _CHECK_SHELL_TYPE, `fish',
 `if $1
   $2
 ifelse(`$3', `', `', `else
   $3
 ')end',
-                        `m4exit(1)')')dnl
+                      `m4exit(1)')')dnl
 
 dnl ==============================================
 dnl Generic Error Handler for Comparison Macros

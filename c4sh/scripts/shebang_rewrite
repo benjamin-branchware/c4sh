@@ -1,0 +1,16 @@
+#!/bin/sh
+
+SHEBANG_LINE=""
+
+if command -v /usr/bin/env >/dev/null 2>&1 && /usr/bin/env $TARGET_SHELL -c "exit 0" >/dev/null 2>&1; then
+	SHEBANG_LINE="#!/usr/bin/env $TARGET_SHELL"
+elif [ -x /usr/bin/$TARGET_SHELL ]; then
+	SHEBANG_LINE="#!/usr/bin/$TARGET_SHELL"
+elif [ -x /bin/$TARGET_SHELL ]; then
+	SHEBANG_LINE="#!/bin/$TARGET_SHELL"
+else
+	echo "Could not find a suitable $TARGET_SHELL executable." >&2
+	SHEBANG_LINE="#!/bin/false"
+fi
+
+echo -n "$SHEBANG_LINE"
