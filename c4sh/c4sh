@@ -1,0 +1,88 @@
+#!/bin/sh
+
+# Wrapper script for running M4 with specific environment macros.
+# Automatically detects the calling shell and allows overriding via options.
+
+MACRO_FILE="m4/env_macros.m4"
+DEFAULT_SHELL="sh"
+
+usage() {
+  echo "Usage: $(basename "$0") [options] <input_script.sh> <output_script.sh>" >&2
+  echo "Options:" >&2
+  echo "  -s <shell>, --shell <shell>   Specify the target shell (overrides autodetection)" >&2
+  exit 1
+}
+
+DETECTED_SHELL="$DEFAULT_SHELL"
+if command -v ps > /dev/null; then
+  P_PID=$(ps -o ppid= -p $$ 2>/dev/null)
+
+  if [ -n "$P_PID" ]; then
+    P_CMD=$(ps -o comm= -p "$P_PID" 2>/dev/null)
+
+    if [ -n "$P_CMD" ]; then
+      DETECTED_SHELL=$(basename "$P_CMD")
+    fi
+  fi
+fi
+TARGET_SHELL="$DETECTED_SHELL"
+
+POS_ARGS=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -s|--shell)
+      if [ -z "$2" ]; then
+        echo "Error: Option '$1' requires a shell name as an argument." >&2
+        usage
+      fi
+      TARGET_SHELL="$2"
+      shift 
+      shift
+      ;;
+    --) 
+      shift
+      POS_ARGS="$@"
+      break
+      ;;
+    -*)
+      echo "Error: Unknown option '$1'" >&2
+      usage
+      ;;
+    *)
+      POS_ARGS="$@"
+      break
+      ;;
+  esac
+done
+
+eval set -- "$POS_ARGS"
+
+if [ "$#" -ne 2 ]; then
+  echo "Error: Incorrect number of positional arguments." >&2
+  usage
+fi
+
+INPUT_FILE="$1"
+OUTPUT_FILE="$2"
+
+if [ ! -f "$INPUT_FILE" ]; then
+  echo "Error: Input file '$INPUT_FILE' not found or is not a regular file." >&2
+  exit 1
+fi
+
+if [ ! -f "$MACRO_FILE" ]; then
+  echo "Error: Macro file '$MACRO_FILE' not found." >&2
+  echo "       Please ensure it exists or update the MACRO_FILE variable in the script." >&2
+  exit 1
+fi
+
+echo "Info: Using TARGET_SHELL=$TARGET_SHELL"
+m4 -D "TARGET_SHELL=$TARGET_SHELL" "$MACRO_FILE" "$INPUT_FILE" > "$OUTPUT_FILE"
+
+M4_EXIT_STATUS=$?
+if [ "$M4_EXIT_STATUS" -ne 0 ]; then
+  echo "Error: m4 command failed with exit status $M4_EXIT_STATUS" >&2
+  exit "$M4_EXIT_STATUS"
+fi
+
+exit 0
