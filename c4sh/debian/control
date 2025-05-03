@@ -1,0 +1,11 @@
+Source: c4sh-tool
+Section: utils
+Priority: optional
+Maintainer: Benjamin Mordaunt <benjamin@branchware.co.uk>
+Standards-Version: 4.6.2
+
+Package: c4sh-tool
+Architecture: all
+Depends: m4, ${misc:Depends}
+Description: Awesome tool
+  Longer Description.
