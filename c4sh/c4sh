@@ -5,11 +5,16 @@
 
 MACRO_FILE="m4/env_macros.m4"
 DEFAULT_SHELL="sh"
+ALL_TARGET_SHELLS="sh csh fish"
 
 usage() {
   echo "Usage: $(basename "$0") [options] <input_script.sh> <output_script.sh>" >&2
   echo "Options:" >&2
   echo "  -s <shell>, --shell <shell>   Specify the target shell (overrides autodetection)" >&2
+  echo "                                  (Mutually exclusive with -a/--all)." >&2
+  echo "  -a, --all                     Generate output for multiple shells (list: ${ALL_TARGET_SHELLS})." >&2
+  echo "                                  Output files named '<input_base>.<shell>.sh'." >&2
+  echo "                                  (Mutually exclusive with -s/--shell)." >&2
   exit 1
 }
 
@@ -27,7 +32,10 @@ if command -v ps > /dev/null; then
 fi
 TARGET_SHELL="$DETECTED_SHELL"
 
+GENERATE_ALL=false
+SHELL_OVERRIDE=""
 POS_ARGS=""
+
 while [ $# -gt 0 ]; do
   case "$1" in
     -s|--shell)
@@ -36,7 +44,10 @@ while [ $# -gt 0 ]; do
         usage
       fi
       TARGET_SHELL="$2"
-      shift 
+      shift 2
+      ;;
+    -a|--all)
+      GENERATE_ALL=true
       shift
       ;;
     --) 
@@ -57,32 +68,74 @@ done
 
 eval set -- "$POS_ARGS"
 
-if [ "$#" -ne 2 ]; then
-  echo "Error: Incorrect number of positional arguments." >&2
+if [ "$GENERATE_ALL" = true ] && [ -n "$SHELL_OVERRIDE" ]; then
+  echo "Error: -a/--all and -s/--shell options cannot be used together." >&2
   usage
 fi
 
-INPUT_FILE="$1"
-OUTPUT_FILE="$2"
+if [ "$GENERATE_ALL" = false ] && [ -n "$SHELL_OVERRIDE" ]; then
+  TARGET_SHELL="$SHELL_OVERRIDE"
+fi
+
+if [ "$GENERATE_ALL" = true ]; then
+  if [ "$#" -ne 1 ]; then
+    echo "Error: -a/--all mode requires exactly one argument: <input_script>." >&2
+    usage
+  fi
+  INPUT_FILE="$1"
+else
+  if [ "$#" -ne 2 ]; then
+    echo "Error: Default mode requires exactly two arguments: <input_script> <output_script>." >&2
+    usage
+  fi
+  INPUT_FILE="$1"
+  OUTPUT_FILE="$2"
+fi
 
 if [ ! -f "$INPUT_FILE" ]; then
-  echo "Error: Input file '$INPUT_FILE' not found or is not a regular file." >&2
-  exit 1
-fi
-
+  echo "Error: Input file '$INPUT_FILE' not found or is not a regular file." >&2; exit 1; fi
 if [ ! -f "$MACRO_FILE" ]; then
   echo "Error: Macro file '$MACRO_FILE' not found." >&2
-  echo "       Please ensure it exists or update the MACRO_FILE variable in the script." >&2
-  exit 1
+  echo "       Please ensure it exists or update the MACRO_FILE variable." >&2; exit 1; fi
+
+
+OVERALL_EXIT_STATUS=0
+
+if [ "$GENERATE_ALL" = true ]; then
+  echo "Info: Generating output for shells: $ALL_TARGET_SHELLS"
+
+  INPUT_BASENAME=$(basename "$INPUT_FILE")
+  INPUT_PREFIX="${INPUT_BASENAME%.*}"
+  if [ "$INPUT_PREFIX" = "$INPUT_BASENAME" ]; then
+      INPUT_PREFIX="$INPUT_BASENAME"
+  fi
+
+  printf '%s\n' $ALL_TARGET_SHELLS | while IFS= read -r current_shell; do
+    [ -z "$current_shell" ] && continue
+
+    CURRENT_OUTPUT_FILE="${INPUT_PREFIX}.${current_shell}.sh"
+    echo "Info: Generating '$CURRENT_OUTPUT_FILE' for TARGET_SHELL=$current_shell..."
+
+    m4 -D "TARGET_SHELL=$current_shell" "$MACRO_FILE" "$INPUT_FILE" > "$CURRENT_OUTPUT_FILE"
+    M4_EXIT_STATUS=$?
+
+    if [ "$M4_EXIT_STATUS" -ne 0 ]; then
+      echo "Error: m4 failed for shell '$current_shell' (status $M4_EXIT_STATUS)" >&2
+      OVERALL_EXIT_STATUS=1
+    fi
+  done
+
+else
+  echo "Info: Using TARGET_SHELL=$TARGET_SHELL"
+  echo "Info: Generating '$OUTPUT_FILE'..."
+
+  m4 -D "TARGET_SHELL=$TARGET_SHELL" "$MACRO_FILE" "$INPUT_FILE" > "$OUTPUT_FILE"
+  M4_EXIT_STATUS=$?
+
+  if [ "$M4_EXIT_STATUS" -ne 0 ]; then
+    echo "Error: m4 command failed with exit status $M4_EXIT_STATUS" >&2
+    OVERALL_EXIT_STATUS="$M4_EXIT_STATUS"
+  fi
 fi
 
-echo "Info: Using TARGET_SHELL=$TARGET_SHELL"
-m4 -D "TARGET_SHELL=$TARGET_SHELL" "$MACRO_FILE" "$INPUT_FILE" > "$OUTPUT_FILE"
-
-M4_EXIT_STATUS=$?
-if [ "$M4_EXIT_STATUS" -ne 0 ]; then
-  echo "Error: m4 command failed with exit status $M4_EXIT_STATUS" >&2
-  exit "$M4_EXIT_STATUS"
-fi
-
-exit 0
+exit "$OVERALL_EXIT_STATUS"
