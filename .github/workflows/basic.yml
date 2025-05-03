@@ -26,9 +26,13 @@ jobs:
       - uses: actions/checkout@v4
 
       # Runs a single command using the runners shell
-      - name: Run c4sh
+      - name: Build c4sh Debian package
         run: |
-          cd c4sh
-          chmod +x c4sh
-          ./c4sh -a test.c4sh
-          
+          apt-get install -y debhelper devscripts
+          dpkg-buildpackage -us -uc -b
+
+      - name: Upload Debian package
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: c4sh-tool_1.0-1_all.deb
+          path: ./c4sh-tool_1.0-1_all.deb
